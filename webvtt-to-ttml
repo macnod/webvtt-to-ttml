@@ -25,6 +25,14 @@ class WebVTTToTTML {
                         DATA_INDENT => 2,
                         ENCODING => 'utf8')});
     has o => (isa => 'HashRef', is => 'ro', lazy => 0, builder => '_o_builder');
+    has language_map_2_3 => (
+        isa => 'HashRef', is => 'ro', lazy => 1, builder => '_lm23_builder');
+    has normal_style => (isa => 'Str', is => 'ro', default => 'normal');
+    has default_region => (isa => 'Str', is => 'ro', default => 'bottom');
+
+    has extent => (isa => 'Str', is => 'ro', default => '80% 20%');
+    has origin => (isa => 'Str', is => 'ro', default => '10% 80%');
+
     has language_map_3_2 => (isa => 'HashRef', is => 'ro', default => sub {+{
           'aar' => 'aa',
           'abk' => 'ab',
@@ -230,8 +238,6 @@ class WebVTTToTTML {
           'zha' => 'za',
           'zho' => 'zh',
           'zul' => 'zu'}});
-    has language_map_2_3 => (
-        isa => 'HashRef', is => 'ro', lazy => 1, builder => '_lm23_builder');
 
     method _lm23_builder () {
         my $lm32= +{};
@@ -309,32 +315,31 @@ class WebVTTToTTML {
             ]
         )->options;
     }
+
     method render_ttml_head () {
         $self->xml->startTag('head');
-        $self->xml->startTag(
-            'metadata',
-            'xmlns:ttm' => 'http://www.w3.org/ns/ttml#metadata');
-        $self->xml->dataElement('ttm:title', $self->o->{title});
-        $self->xml->endTag('metadata');
+        $self->xml->emptyTag('metadata', 'ttm:title' => $self->o->{title});
         $self->xml->startTag('layout');
-        $self->xml->startTag(
+        $self->xml->emptyTag(
             'region',
-            'xml:id' => 'bottom-center',
-            'tts:origin' => '10% 70%',
-            'tts:extent' => '80% 20%');
-        $self->xml->emptyTag('style', 'tts:textAlign' => 'center');
-        $self->xml->endTag('region');
+            'xml:id' => $self->default_region,
+            'tts:origin' => $self->origin,
+            'tts:extent' => $self->extent,
+            'tts:textAlign' => 'center',
+            'tts:displayAlign' => 'after');
         $self->xml->endTag('layout');
         $self->xml->endTag('head');
     }
 
-    method render_ttml (HashRef $captions) {
+    method render_ttml(HashRef $captions) {
         $self->xml->xmlDecl('UTF-8');
         $self->xml->startTag(
             'tt',
             'xml:lang' => 'en',
-            xmlns => 'http://www.w3.org/ns/ttml',
-            'xmlns:tts' => "http://www.w3.org/ns/ttml#styling");
+            'xmlns' => 'http://www.w3.org/ns/ttml',
+            'xmlns:tts' => 'http://www.w3.org/ns/ttml#styling',
+            'xmlns:ttl' => 'http://www.w3.org/ns/ttml#layout',
+            'xmlns:ttm' => 'http://www.w3.org/ns/ttml#metadata');
         $self->render_ttml_head;
         $self->xml->startTag('body');
         for my $language (keys %$captions) {
@@ -345,7 +350,7 @@ class WebVTTToTTML {
                     join("<br/>\n", @{$record->{lines}}),
                     begin => $record->{begin},
                     end => $record->{end},
-                    region => 'bottom-center');
+                    region => $self->default_region);
             }
             $self->xml->endTag('div');
         }
@@ -354,7 +359,7 @@ class WebVTTToTTML {
         $self->xml->end;
     }
 
-    method parse_webvtt (Str $filename, Str $webvtt) {
+    method parse_webvtt(Str $filename, Str $webvtt) {
         my @lines= split /\r\n|\r|\n/, $webvtt;
         if(@lines < 3) {
             $self->logit("File '$filename' is empty.\n");
